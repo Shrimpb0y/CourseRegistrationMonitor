@@ -1,0 +1,13 @@
+{
+  "port": 8765,
+  "pollIntervalSeconds": 30,
+  "target": {
+    "courseCode": "LPD2107",
+    "courseName": "GENERAL GERMAN LANGUAGE I",
+    "lectureGroup": "1",
+    "lectureTime": "I10-12,R09",
+    "category": "EL",
+    "labGroup": "",
+    "labTime": ""
+  }
+}

@@ -1,43 +1,101 @@
-# Tiss Registration Bot
-This bot should help people like you and me who typically forget registering to courses on time and don't get a place.
+# UPM 本地选课监听
 
-## Requirements
-To use the bot only node and npm are needed. If you do not have already installed it, you can simply get the most recent version of both from here: https://nodejs.org.
+当前归档版本：`v-0.1`（软件包版本 `0.1.0`）。变更及验收范围见 [CHANGELOG.md](CHANGELOG.md)；交付说明、讨论与优化记录、GitHub 选型汇总和真实管理页截图保存在 [docs/](docs/)。Git 只保存程序与可分享文档；本地登录和运行数据不纳入版本。
 
-## Usage
-Before starting the bot you have to edit the configuration file named `register.json`. In this file simply put your `studenId` and your `password` in the first section, which are actually your tiss credentials. In the array of registrations add a registration as follows:
+本项目从 estallio/tiss-registration-bot 派生，原始版本为 `6dbd4dcba8a6f9603ba14b55a67f2719a463b7f5`。原始代码和配置保存在 `upstream-tiss/`，MIT 许可证保留在根目录。UPM 适配代码是新实现，保留浏览器自动化、后台任务及重试的设计方向，不继续使用原项目的 TU Vienna 登录或屏蔽 JavaScript 逻辑。
 
-- `address`: the link from the tiss registration site, for this part it doesn't matter if it's an exam, exercise or course registration - just be sure to open the right tab before copying the link from the browser<br>
-- `name`: the whole name of the course as simple text (including date if it's in the name, don't use any special formatting - just copy it or write it per hand with exactly 1x whitespace between, see the picture below)
+## 当前交付
 
-<br>
+- Node.js 本地服务，管理地址 `http://127.0.0.1:8765`。
+- 新版 Puppeteer Core 驱动本机 Edge，独立浏览器配置保存在 `runtime/browser-profile`。
+- 手动登录，不要求填写或保存明文密码。
+- 注册列表回查、教学班余量查询、串行轮询、失败退避和重复注册保护。
+- 默认仅监听；本机管理页面明确开启自动选课后才会尝试添加和提交。
+- 自动注册结果不明确时，状态保存在本机并暂停；重启不会清除人工检查标志。
+- 本地管理页可搜索课程代码/前缀，加载教学班与完整时间，选择课程性质后保存目标。每次处理一个目标，多目标调度后续实现。
 
-![selector](https://github.com/L-E-O-N-H-A-R-D/TissRegistrationBot/blob/master/img/selector.png?raw=true)
+## 启动
 
-<br>
+当前机器已经安装依赖。用 PowerShell 在此目录执行：
 
-When the configuration was updated start a terminal and navigate to the folder. Arrived in the folder, start:
+先双击 `启动本地监听.cmd`，保留弹出的窗口，再用系统 Edge 打开 `http://127.0.0.1:8765/`。窗口会直接显示启动错误；关闭窗口会停止服务。确认此方式正常后，可以双击 `后台启动.cmd` 隐藏服务窗口。关闭服务时双击 `停止本地监听.cmd`。这些入口只对所启动的 PowerShell 进程设置脚本执行方式，不修改系统执行策略。
 
-<br>
+聊天或编辑器里的文件链接只会显示代码。要实际运行，请在 Windows 文件资源管理器中双击上述文件，或者按 Win + R，粘贴以下命令并回车：
 
-`npm install`
+```text
+powershell.exe -NoProfile -ExecutionPolicy Bypass -NoExit -File "C:\Users\22567\Documents\Codex\2026-10-10\bang\outputs\upm-course-monitor\start-local.ps1"
+```
 
-and afterwards:
+如显示“拒绝建立连接”，先检查启动窗口是否仍在运行。仅有旧的 `server.pid` 或日志中的地址不代表服务当前可用；新版入口检查 `/health`，只有本机服务实际响应才会报告可访问。端口已占用或依赖缺失时会明确报错。首次验收请使用系统 Edge。
 
-`node registration.js register.json`
+```powershell
+powershell -ExecutionPolicy Bypass -File .\start-local.ps1
+```
 
-<br>
+脚本优先使用 Codex 附带的 Node.js，找不到时使用系统 Node.js。也可在安装 Node.js 22 或以上的机器上执行 `npm ci --ignore-scripts` 后用 `npm start`。不会下载另一个 Chromium；程序使用本机 Edge。
 
-Here, `register.json` is a console-parameter and represents the .json formatted file. The structure as expected like in the sample file. After starting the bot you should see some console output what the bot is actually doing. When the bot has to wait for a registration to begin, every 30 seconds a status message will pe printed to the console. Status updates are printed every 10 seconds. Be sure the bot has internet connection when starting for the first time because some caches are created. After caching, all the files for a faster start up are available and the bot waits for the registration to start. In case of an error like connection issues or a missing registration button, the bot waits some time (depending on the attempt) and retries until stopped.
+1. 打开本机管理地址。
+2. 点击“打开登录浏览器”，在新的独立 Edge 窗口手动登录 UPM。
+3. 回到管理页面，输入课程代码或前缀（例如 LPD），点击“搜索课程”；点击结果中的课程加载教学班。
+4. 选择 Lecture Group，核对该组全部上课时间；有 Lab 时同时选择实验班。确认课程性质（默认 EL）和查询间隔，点击“保存为监听目标”。目标保存在本机 config.json，重启后保留。满员班级也可以选择并监听。
+5. 点击“开始监听”。此时只查询，不提交注册；改选前先停止并等待当前操作结束。
+6. 如要自动选课，确认目标后勾选相应确认框，再点击“启动自动选课”。每次保存新目标都会清除自动模式并要求再次确认；带 Lab 的目标暂不能启动自动选课，仅监测 Lecture 余量。
+7. 需要桌面提醒时，在本机管理页面启用通知并允许浏览器的通知权限。桌面通知依赖管理页面保持打开；后台监听不依赖该页面。
 
-**Do not forget to delete the sample itmes in register.json before you start the bot!**
+搜索返回学校弹窗的当前页，结果较多时请使用更完整的代码。保存时只能选择本次已加载的班级；未知班级、缺少 Lab 选择或上次注册结果未核实都会被拒绝。界面选择不判断先修资格、学分上限或时间冲突，最终资格由学校决定。
 
-Keep in mind a few things when using the bot:
- - If TISS is busy, the bot may not register you correctly.
- - The bot does not have a reconnect function for the caching process and chrome can always throw some errors.
- - If an error occurs (eg credentials are wrong), the bot cancels a single registration or terminates as a whole.
- - Insert only german course names as the default language from tiss is german.
- - Look at the specific registration details: only default registrations over tiss with a begin-date are possible.
- - Always look at the tiss favourites if you are registered to some courses or not.
- 
- If something went wrong or you realized an error please open an issue or send me an email.
+不要在监听过程中操作专用 Edge 的 UPM 页面，程序会导航和查询。它与 Codex 内置浏览器的登录会话相互独立。电脑须保持开机、联网且不睡眠，锁屏可以继续运行。
+
+## 配置目标
+
+优先使用管理页搜索并保存目标，不再需要手工编辑 JSON。也可停止后台程序后修改 `config.json`，再启动。每次运行处理一个目标；新的目标必须核实完整的学校时间代码。
+
+```json
+{
+  "port": 8765,
+  "pollIntervalSeconds": 30,
+  "target": {
+    "courseCode": "LPD2107",
+    "lectureGroup": "1",
+    "lectureTime": "I10-12,R09",
+    "category": "EL",
+    "labGroup": ""
+  }
+}
+```
+
+当前目标周一 10:00–12:00，另含周三 09:00，教室 BK03 KAA。FE 即 Free Elective，在系统中选择 ELECTIVE COURSE（EL）。配置中的班级、性质和完整时间须与学校页面一致。允许查询间隔为 15–3600 秒，建议初始 30 秒。两个名额字段必须都为正值才会触发自动注册；若字段语义或格式变化，暂停并检查。
+
+实验室课程的自动选择尚未验证。本版本应先用于已验证的无 Lab 目标；带 Lab 的课程需要补充选择与确认逻辑。不要只填写 Lab Group 就认为能够自动处理所有实验班流程。
+
+## 停止和恢复
+
+“停止监听”阻止后续循环和尚未发生的最终提交；已经提交到学校的请求无法撤回。若暂停时已有待注册条目，请到学校页面核对，临时保留可能占用名额。不要直接重启尝试重复提交。
+
+彻底关闭服务及独立 Edge：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\stop-local.ps1
+```
+
+注册结果不明确时先核对学校已注册与待注册列表，再在本机管理页面点击“我已核实上次结果，解除暂停”。登录过期时在独立 Edge 登录；监听会按退避间隔再次检查。可以先停止监听再登录，然后重新启动。
+
+## 存储与网络
+
+运行记录在 `runtime/`：`state.json`、`events.jsonl`、`notifications.jsonl`、服务日志和 Edge 独立配置目录。目录已加入 `.gitignore`，不能将它打包分享或上传 GitHub。项目没有云数据库、远程日志或第三方消息通知。运行只需要 UPM 网站；安装依赖需要 GitHub 和 npm 注册表。Edge 自身的系统服务与网络行为不由本项目完整控制，不应把应用无上传功能解释为浏览器绝对没有其他网络请求。
+
+服务只监听 127.0.0.1；管理 API 校验 Host、Origin 和页面随机令牌，阻止其他网页调用选课操作。不要修改为公网监听。
+
+## 验证范围
+
+2026-10-10 新版适配器通过已登录专用 Edge 完成真实只读搜索：LPD 返回 LPD2107、LPD2108；分别加载到 5 个、1 个 Lecture Group，均无 Lab。LPD2107 Group 1 的完整时间为 I10-12,R09，容量 29、已注册 29、两个余量字段均为 0。LPD2108 Group 1 的 AVAILABLE 为 1，但 NO. OF QUOTA AVAILABLE 为 0，因此仍判断为不可自动注册。以上是查询快照，没有添加或提交课程，也没有开启持续监听。
+
+修复了学校搜索框每两秒检查一次而导致过早读取旧结果的问题，改为等待学校同源只读目录请求的响应；同时修复管理页 CSP 阻止加载 app.js 的问题。旧服务必须重启才能加载修订代码。新增 restart-local.ps1 和“重新启动.cmd”，通过本机 API 关闭旧服务并等待端口释放，再启动新版。Win + R 可执行：
+
+```text
+powershell.exe -NoProfile -ExecutionPolicy Bypass -NoExit -File "C:\Users\22567\Documents\Codex\2026-10-10\bang\outputs\upm-course-monitor\restart-local.ps1"
+```
+
+21 项逻辑/API/适配辅助测试通过，包含不同课程切换、Lab 必选、操作互斥、保存恢复、清除自动模式和页面脚本加载策略。最近一次覆盖率约 69%，尚未达到 80%；完整 npm test 中的模拟浏览器测试在受限环境中遇到 Target closed，尚未通过。
+
+2026-10-10 17:52（Asia/Singapore），新版服务及真实管理页完成搜索 LPD → 加载 LPD2107 的 5 个组别 → 选择 Group 1 → 保存 EL 目标 → 开始仅监听 → 成功读取余量 → 停止的串联验收。最后成功查询为 17:52:44，容量 29、已注册 29、余量 0、可用 0，无错误；验收后 running=false、autoEnroll=false。目标保留在本机。截图见上级目录“UPM课程选择验收.jpg”。真实空位后的最终注册仍未验收。适配层依赖当前 e-SMP 页面结构，变化时需要检查。

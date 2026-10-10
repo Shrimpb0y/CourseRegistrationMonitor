@@ -58,4 +58,10 @@ typings/
 
 # dotenv environment variables file
 .env
+runtime/
+.env.*
+!.env.example
+*.tmp
+# Historical school screenshot contains personal identifiers
+upm-lpd2107-query.png
 
